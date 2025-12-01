@@ -1,0 +1,31 @@
+{
+  "name": "contracts",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "build": "tsc",
+    "deploy_bridge": "node --loader ts-node/esm src/scripts/deploy_bridge.ts",
+    "create_intent": "node --loader ts-node/esm src/scripts/create_intent.ts",
+    "oracle_service": "node --loader ts-node/esm src/scripts/oracle_service.ts",
+    "claim": "node --loader ts-node/esm src/scripts/bridge_service.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^24.10.1",
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
+    "o1js": "^2.11.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.5"
+  }
+}

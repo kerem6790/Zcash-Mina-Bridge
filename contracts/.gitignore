@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+build/
+dist/
+
+# Environment variables and keys
+.env
+keys.json
+
+# Local state (Merkle Map, Intents)
+merkle_map.json
+intents.json
+
+# Logs
+debug_log.txt
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
