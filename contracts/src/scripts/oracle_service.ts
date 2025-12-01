@@ -19,6 +19,7 @@ async function main() {
     try {
         console.log('Fetching Zcash Block...');
 
+        let block: any;
         let blockHash = '';
         let txids: string[] = [];
 
@@ -33,7 +34,7 @@ async function main() {
                 console.log(`Using latest block hash: ${blockHash}`);
             }
 
-            const block = await zcash.getBlock(blockHash);
+            block = await zcash.getBlock(blockHash);
             txids = block.tx;
             console.log(`Zcash Tip: ${blockHash}`);
         } catch (e: any) {
@@ -45,22 +46,30 @@ async function main() {
         // The Oracle MUST set the root that the Bridge Service will prove against.
         // Since we are using "Shadow Tree", the Oracle must also compute this Shadow Root
         // and set it as the "blockHeaderHash" (or we assume blockHeaderHash IS the root).
-        // As discussed, for PoC we assume oracleBlockHeaderHash stores the Merkle Root.
+        // As discussed, for PoC we assume oracleBlockHeaderHash        // 2. Compute "Shadow" Merkle Tree
         const { root } = MerkleTreeUtils.computePoseidonMerkleTree(txids);
         console.log(`Computed Shadow Merkle Root: ${root.toString()}`);
 
-        // Update zkApp
+        // 3. Update Oracle
         console.log('Compiling ZecBridge...');
         await ZecBridge.compile();
 
-        const zkAppAddress = PublicKey.fromBase58(ZKAPP_ADDRESS);
+        const zkAppAddress = PublicKey.fromBase58(ZECBRIDGE_ADDRESS);
         await fetchAccount({ publicKey: zkAppAddress });
         await fetchAccount({ publicKey: ORACLE_ADDR });
+
         const zkApp = new ZecBridge(zkAppAddress);
 
         console.log('Sending Transaction to update Oracle...');
+
+        // Prepare prevHash
+        // We need to convert previousblockhash (hex) to Field
+        // Similar truncation as txid? Yes, for PoC.
+        const prevHashHex = block.previousblockhash;
+        const prevHash = Field(BigInt('0x' + prevHashHex.substring(0, 62)));
+
         const tx = await Mina.transaction({ sender: ORACLE_ADDR, fee: 100_000_000 }, async () => {
-            await zkApp.setOracleBlockHeaderHash(root);
+            await zkApp.setOracleBlockHeaderHash(root, prevHash);
         });
 
         await tx.prove();

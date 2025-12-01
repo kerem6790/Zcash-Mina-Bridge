@@ -71,6 +71,7 @@ export class ZecBridge extends SmartContract {
     // Intent Management
     @state(Field) nextIntentId = State<Field>();
     @state(Field) intentsRoot = State<Field>(); // MerkleMap root for intents
+    @state(Field) nullifiersRoot = State<Field>(); // MerkleMap root for nullifiers
 
     init() {
         super.init();
@@ -78,12 +79,23 @@ export class ZecBridge extends SmartContract {
         // Initialize with empty MerkleMap root
         const emptyMapRoot = Field(new MerkleMap().getRoot());
         this.intentsRoot.set(emptyMapRoot);
+        this.nullifiersRoot.set(emptyMapRoot);
     }
 
-    @method async setOracleBlockHeaderHash(blockHeaderHash: Field) {
+    @method async setOracleBlockHeaderHash(blockHeaderHash: Field, prevHash: Field) {
         // In a real app, check for admin signature or governance.
         // For PoC, we assume the deployer/admin calls this.
-        // We can add a requireSignature() from a stored admin key if needed.
+
+        const currentHash = this.oracleBlockHeaderHash.getAndRequireEquals();
+
+        // Enforce Chain Continuity
+        // The new block's prevHash must match the current stored hash.
+        // Exception: If currentHash is 0 (uninitialized), we allow the update (Bootstrap).
+        const isBootstrap = currentHash.equals(Field(0));
+        const isValidChain = prevHash.equals(currentHash);
+
+        isBootstrap.or(isValidChain).assertTrue("Invalid Chain Continuity: prevHash does not match current Oracle state");
+
         this.oracleBlockHeaderHash.set(blockHeaderHash);
     }
 
@@ -153,8 +165,15 @@ export class ZecBridge extends SmartContract {
         this.intentsRoot.set(rootAfter);
     }
 
-    @method async claim(intentId: Field, zcashTxData: ZcashTxData, keyWitness: MerkleMapWitness, intent: IntentStruct) {
+    @method async claim(
+        intentId: Field,
+        zcashTxData: ZcashTxData,
+        keyWitness: MerkleMapWitness,
+        intent: IntentStruct,
+        nullifierWitness: MerkleMapWitness // Added nullifier witness
+    ) {
         const currentRoot = this.intentsRoot.getAndRequireEquals();
+        const currentNullifiersRoot = this.nullifiersRoot.getAndRequireEquals();
 
         // 1. Intent Load & Basic Checks
         const [rootCheck, key] = keyWitness.computeRootAndKey(intent.hash());
@@ -179,7 +198,17 @@ export class ZecBridge extends SmartContract {
         const computedRoot = MerkleHelper.computeRoot(zcashTxData.txid, zcashTxData.merklePath, zcashTxData.merkleIndex);
         computedRoot.assertEquals(zcashTxData.merkleRoot);
 
-        // 4. Output Recipient & Amount Check
+        // 4. Nullifier Check (Double Spend Protection)
+        // Verify that the txid has NOT been used (value is 0)
+        const [nullifierRootCheck, nullifierKey] = nullifierWitness.computeRootAndKey(Field(0));
+        nullifierRootCheck.assertEquals(currentNullifiersRoot);
+        nullifierKey.assertEquals(zcashTxData.txid);
+
+        // Set Nullifier (Mark as used, value 1)
+        const [newNullifiersRoot] = nullifierWitness.computeRootAndKey(Field(1));
+        this.nullifiersRoot.set(newNullifiersRoot);
+
+        // 5. Output Recipient & Amount Check
         let ok = Bool(false);
 
         for (let i = 0; i < 5; i++) {
@@ -191,7 +220,7 @@ export class ZecBridge extends SmartContract {
 
         ok.assertTrue("No matching output found");
 
-        // 5. Escrow Release
+        // 6. Escrow Release
         // Transfer MINA from zkApp to sender (User2)
         const sender = this.sender.getAndRequireSignature();
         this.send({ to: sender, amount: intent.makerAmountMina });

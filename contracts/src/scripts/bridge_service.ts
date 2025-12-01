@@ -191,15 +191,40 @@ async function main() {
         console.log(`Stored Hash for Intent ${intentId}: ${storedHash.toString()}`);
         console.log(`Computed Intent Hash: ${intent.hash().toString()}`);
 
+        // 4. Prepare Nullifier Witness
+        const nullifiersMap = new MerkleMap();
+        const nullifiersFile = 'nullifiers.json';
+        if (fs.existsSync(nullifiersFile)) {
+            const data = JSON.parse(fs.readFileSync(nullifiersFile, 'utf8'));
+            for (const key in data) {
+                nullifiersMap.set(Field(key), Field(data[key]));
+            }
+        }
+
+        // txidField is already defined above
+        const isNullified = nullifiersMap.get(txidField);
+        if (isNullified.equals(Field(1)).toBoolean()) {
+            console.error("Error: This Zcash transaction has already been claimed (Nullified).");
+            process.exit(1);
+        }
+
+        const nullifierWitness = nullifiersMap.getWitness(txidField);
+
+        // 5. Send Claim Transaction
+        console.log('Sending Claim Transaction...');
         const tx = await Mina.transaction({ sender: takerAddr, fee: 500_000_000 }, async () => {
-            await zkApp.claim(intentId, zcashTxData, witness, intent);
+            await zkApp.claim(intentId, zcashTxData, witness, intent, nullifierWitness);
         });
 
         await tx.prove();
-        await tx.sign([takerKey]).send();
-
+        const pendingTx = await tx.sign([takerKey]).send();
+        console.log(`Claim Tx Hash: ${pendingTx.hash}`);
+        console.log('Waiting for inclusion...');
+        await pendingTx.wait();
         console.log('Claim Successful!');
 
+        // Update Local State
+        // 1. Intents
         // Update local map (Intent state changed to FILLED)
         const updatedIntent = new IntentStruct({
             ...intent,
