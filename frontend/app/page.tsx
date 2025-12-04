@@ -23,6 +23,8 @@ export default function Home() {
   // Claim Inputs
   const [jsonExport, setJsonExport] = useState('');
   const [intentIdToClaim, setIntentIdToClaim] = useState('0');
+  const [exchangeRate, setExchangeRate] = useState<string | null>(null);
+
 
   useEffect(() => {
     (async () => {
@@ -44,6 +46,16 @@ export default function Home() {
       setProver({ proveClaim });
       setStatus('Ready. Connect Wallet.');
     })();
+
+    // Fetch Exchange Rate
+    fetch('/api/price')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.data?.quote?.MINA?.price) {
+          setExchangeRate(data.data.quote.MINA.price.toFixed(4));
+        }
+      })
+      .catch(err => console.error('Failed to fetch price', err));
   }, []);
 
   const connectWallet = async () => {
@@ -196,9 +208,9 @@ export default function Home() {
       <header className="absolute top-0 w-full p-6 flex justify-between items-center z-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full border border-white/20 shadow-lg shadow-purple-500/20 overflow-hidden flex items-center justify-center bg-black">
-            <img src="/logo.png" alt="Zcash-Mina Bridge" className="w-[160%] h-[160%] max-w-none object-cover" />
+            <img src="/logo.png" alt="ZIMA" className="w-[160%] h-[160%] max-w-none object-cover" />
           </div>
-          <span className="font-bold text-xl tracking-tight">Zcash<span className="text-purple-400">Bridge</span></span>
+          <span className="font-bold text-xl tracking-tight">ZI<span className="text-purple-400">MA</span></span>
         </div>
         {!account ? (
           <button
@@ -253,7 +265,7 @@ export default function Home() {
                       placeholder="0.0"
                     />
                     <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/10">
-                      <div className="w-5 h-5 bg-orange-400 rounded-full"></div>
+                      <img src="/mina-logo.png" alt="MINA" className="w-5 h-5 rounded-full" />
                       <span className="font-bold">MINA</span>
                     </div>
                   </div>
@@ -278,11 +290,17 @@ export default function Home() {
                       placeholder="0"
                     />
                     <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/10">
-                      <div className="w-5 h-5 bg-yellow-400 rounded-full"></div>
+                      <img src="/zcash-logo.png" alt="ZEC" className="w-5 h-5 rounded-full" />
                       <span className="font-bold">ZEC</span>
                     </div>
                   </div>
                 </div>
+
+                {exchangeRate && (
+                  <div className="text-center text-xs text-gray-500 -mt-2">
+                    1 ZEC ≈ <span className="text-purple-400 font-mono">{exchangeRate}</span> MINA
+                  </div>
+                )}
 
                 <div className="bg-[#1A1A1A] p-4 rounded-2xl border border-white/5">
                   <label className="text-gray-400 text-sm block mb-2">Orchard Receiver Address</label>
