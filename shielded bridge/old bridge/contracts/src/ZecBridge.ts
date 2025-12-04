@@ -67,6 +67,7 @@ export class ZcashTxData extends Struct({
 export class ZecBridge extends SmartContract {
     // Trusted Oracle State
     @state(Field) oracleBlockHeaderHash = State<Field>();
+    @state(PublicKey) oraclePublicKey = State<PublicKey>(); // Added Oracle Public Key State
 
     // Intent Management
     @state(Field) nextIntentId = State<Field>();
@@ -80,11 +81,16 @@ export class ZecBridge extends SmartContract {
         const emptyMapRoot = Field(new MerkleMap().getRoot());
         this.intentsRoot.set(emptyMapRoot);
         this.nullifiersRoot.set(emptyMapRoot);
+
+        // Hardcoded Oracle Public Key
+        this.oraclePublicKey.set(PublicKey.fromBase58("B62qnNwUuiSkse4V4bnUwjQoxgJ26HBnN5Ya9c1pyq6DhgzvXW5XgZN"));
     }
 
     @method async setOracleBlockHeaderHash(blockHeaderHash: Field, prevHash: Field) {
-        // In a real app, check for admin signature or governance.
-        // For PoC, we assume the deployer/admin calls this.
+        // Access Control: Verify Sender is Oracle
+        const oracleKey = this.oraclePublicKey.getAndRequireEquals();
+        const sender = this.sender.getAndRequireSignature();
+        sender.assertEquals(oracleKey);
 
         const currentHash = this.oracleBlockHeaderHash.getAndRequireEquals();
 

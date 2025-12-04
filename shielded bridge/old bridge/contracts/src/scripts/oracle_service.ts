@@ -1,12 +1,12 @@
 import { ZecBridge } from '../ZecBridge.js';
 import { ZcashRpcClient, MerkleTreeUtils } from './zcash_utils.js';
 import { PrivateKey, Mina, AccountUpdate, Field, PublicKey, fetchAccount } from 'o1js';
-import { MINA_GRAPHQL_ENDPOINT, ZECBRIDGE_ADDRESS, DEPLOYER_PRIVATE_KEY, ZCASH_RPC_URL, ZCASH_RPC_USER, ZCASH_RPC_PASS } from '../config.js';
+import { MINA_GRAPHQL_ENDPOINT, ZECBRIDGE_ADDRESS, ORACLE_PRIVATE_KEY, ZCASH_RPC_URL, ZCASH_RPC_USER, ZCASH_RPC_PASS } from '../config.js';
 
 // Configuration
 const NETWORK_URL = MINA_GRAPHQL_ENDPOINT;
 const ZKAPP_ADDRESS = ZECBRIDGE_ADDRESS;
-const ORACLE_KEY = PrivateKey.fromBase58(DEPLOYER_PRIVATE_KEY); // Admin key
+const ORACLE_KEY = PrivateKey.fromBase58(ORACLE_PRIVATE_KEY); // Oracle key
 const ORACLE_ADDR = ORACLE_KEY.toPublicKey();
 
 async function main() {

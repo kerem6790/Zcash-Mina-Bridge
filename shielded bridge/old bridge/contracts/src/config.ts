@@ -7,6 +7,7 @@ export const MINA_GRAPHQL_ENDPOINT = process.env.MINA_GRAPHQL_ENDPOINT || 'https
 export const ZECBRIDGE_ADDRESS = process.env.ZKAPP_ADDRESS || 'B62qnHWafr5CZifyPQpFTsv3dD1YYC9zh1nctAUqeiAr6oMYrE8Mroe'; // Default from previous deploy
 export const MAKER_PUBLIC_KEY = process.env.MINA_PUBLIC_KEY || ''; // User1
 export const DEPLOYER_PRIVATE_KEY = process.env.MINA_PRIVATE_KEY || '';
+export const ORACLE_PRIVATE_KEY = process.env.ORACLE_PRIVATE_KEY || ''; // Added Oracle Key
 
 if (!DEPLOYER_PRIVATE_KEY) {
     console.warn("WARNING: MINA_PRIVATE_KEY not set in .env");

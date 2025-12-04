@@ -1,0 +1,23 @@
+{
+    "name": "zk-app",
+    "version": "1.0.0",
+    "description": "Mina Smart Contract for Zcash Shielded Bridge",
+    "main": "build/src/index.js",
+    "types": "build/src/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "buildw": "tsc --watch",
+        "test": "jest",
+        "testw": "jest --watch"
+    },
+    "dependencies": {
+        "o1js": "^1.0.0",
+        "bridge-core": "file:../bridge-core"
+    },
+    "devDependencies": {
+        "typescript": "^5.0.0",
+        "@types/jest": "^29.0.0",
+        "jest": "^29.0.0",
+        "ts-jest": "^29.0.0"
+    }
+}
