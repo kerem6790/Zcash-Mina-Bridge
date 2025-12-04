@@ -7,25 +7,33 @@ export interface ZcashBlock {
     orchard_tree?: {
         root: string;
     };
+    finalorchardroot?: string;
 }
 
 export class ZcashRPC {
     private async call(method: string, params: any[] = []): Promise<any> {
         try {
+            const config: any = {
+                headers: { 'Content-Type': 'application/json' }
+            };
+
+            // Only add auth if user/pass are configured
+            if (CONFIG.ZEC_RPC_USER && CONFIG.ZEC_RPC_PASS) {
+                config.auth = {
+                    username: CONFIG.ZEC_RPC_USER,
+                    password: CONFIG.ZEC_RPC_PASS,
+                };
+            }
+
             const response = await axios.post(
                 CONFIG.ZEC_RPC_URL,
                 {
                     jsonrpc: '1.0',
-                    id: 'curltest',
+                    id: 'zcash-bridge-oracle',
                     method,
                     params,
                 },
-                {
-                    auth: {
-                        username: CONFIG.ZEC_RPC_USER,
-                        password: CONFIG.ZEC_RPC_PASS,
-                    },
-                }
+                config
             );
 
             if (response.data.error) {
@@ -33,7 +41,8 @@ export class ZcashRPC {
             }
             return response.data.result;
         } catch (error: any) {
-            throw new Error(`RPC Call Failed: ${error.message}`);
+            const msg = error.response ? JSON.stringify(error.response.data) : error.message;
+            throw new Error(`RPC Call Failed: ${msg}`);
         }
     }
 
@@ -47,6 +56,7 @@ export class ZcashRPC {
 
     async getBlock(hash: string): Promise<ZcashBlock> {
         // verbosity 1 to get JSON object
+        // Some RPCs might need verbosity 2 for full txs, but 1 is usually enough for header info
         return await this.call('getblock', [hash, 1]);
     }
 
@@ -57,6 +67,9 @@ export class ZcashRPC {
 
             if (block.orchard_tree && block.orchard_tree.root) {
                 return block.orchard_tree.root;
+            }
+            if (block.finalorchardroot) {
+                return block.finalorchardroot;
             }
             return null;
         } catch (e) {

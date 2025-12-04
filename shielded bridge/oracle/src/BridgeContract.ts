@@ -59,10 +59,9 @@ export class BridgeContract extends SmartContract {
         super.init();
         this.admin.set(admin);
         this.nextIntentId.set(Field(0));
-        // Initialize empty roots
-        const emptyRoot = Field("22731122946631793544306773678309960639073656601863129978322145324846701682624");
-        this.usedBridgeNullifiersRoot.set(emptyRoot);
-        this.intentsRoot.set(emptyRoot);
+        // Initialize empty roots (mocking 0 as empty root for now)
+        this.usedBridgeNullifiersRoot.set(Field(0));
+        this.intentsRoot.set(Field(0));
     }
 
     @method async adminUpdateAnchor(newAnchorRoot: Field) {

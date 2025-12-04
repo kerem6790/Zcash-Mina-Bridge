@@ -1,5 +1,6 @@
 import { ZcashRPC } from './rpc';
 import { MinaUpdater } from './update';
+import { BridgeContract } from './BridgeContract.js';
 import { CONFIG } from './config';
 
 async function main() {

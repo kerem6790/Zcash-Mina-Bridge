@@ -27,7 +27,7 @@ export default function Home() {
   useEffect(() => {
     (async () => {
       setStatus('Initializing o1js...');
-      const { Mina, PublicKey, Field, UInt64, Poseidon } = await import('o1js');
+      const { Mina, PublicKey, Field, UInt64, UInt32, Poseidon } = await import('o1js');
       const { BridgeContract, IntentStruct } = await import('zk-app');
       const { proveClaim } = await import('bridge-prover');
 
@@ -35,11 +35,12 @@ export default function Home() {
       const Network = Mina.Network('https://api.minascan.io/node/devnet/v1/graphql');
       Mina.setActiveInstance(Network);
 
-      // Address of the deployed contract (Placeholder)
-      const zkAppAddress = PublicKey.fromBase58('B62qr...'); // TODO: Deploy and set real address
+      // Address of the deployed contract
+      const zkAppAddressKey = process.env.NEXT_PUBLIC_ZKAPP_ADDRESS || 'B62qq8fqSDTQFkjstvJBHJvhFFo5v4rZtM2V6uHMJk4SX7aF7S9BQL7';
+      const zkAppAddress = PublicKey.fromBase58(zkAppAddressKey);
       const contract = new BridgeContract(zkAppAddress);
 
-      setZkApp({ contract, Mina, PublicKey, Field, UInt64, Poseidon, IntentStruct, MerkleMapWitness: (await import('o1js')).MerkleMapWitness });
+      setZkApp({ contract, Mina, PublicKey, Field, UInt64, UInt32, Poseidon, IntentStruct, MerkleMapWitness: (await import('o1js')).MerkleMapWitness });
       setProver({ proveClaim });
       setStatus('Ready. Connect Wallet.');
     })();
@@ -59,7 +60,7 @@ export default function Home() {
     if (!zkApp || !account) return;
     try {
       setStatus('Creating Intent...');
-      const { contract, Mina, PublicKey, Field, UInt64, Poseidon } = zkApp;
+      const { contract, Mina, PublicKey, Field, UInt64, UInt32, Poseidon } = zkApp;
 
       // Calculate receiverHash from pk_d (Mocking hash logic as per contract)
       const receiverHash = Poseidon.hash([Field(123)]); // TODO: Real parsing of pk_d
@@ -71,10 +72,22 @@ export default function Home() {
       // Transaction
       await (window as any).mina.sendTransaction({
         transaction: async () => {
-          alert("In a real app, we fetch the MerkleMap witness from an indexer here.");
+          // Witness for empty slot 0
+          const keyWitness = new zkApp.MerkleMapWitness(
+            new Array(255).fill(false),
+            new Array(255).fill(Field(0))
+          );
+
+          await contract.createIntent(
+            minZecAmount,
+            receiverHash,
+            UInt32.from(200000), // deadline
+            amountToLock,
+            keyWitness
+          );
         }
       });
-      setStatus('Intent Created (Mock)');
+      setStatus('Intent Created! Wait for block...');
     } catch (e: any) {
       setStatus('Error: ' + e.message);
     }
@@ -84,16 +97,16 @@ export default function Home() {
     if (!zkApp || !prover || !account) return;
     try {
       setStatus('Fetching Witness from Indexer...');
-      const { contract, Field, IntentStruct, MerkleMapWitness } = zkApp;
+      const { contract, Field, IntentStruct, MerkleMapWitness, UInt32 } = zkApp;
       const { proveClaim } = prover;
 
-      // 1. Fetch Intent from Chain (Mock)
+      // 1. Fetch Intent from Chain (Mocking the struct, but data should match creation)
       const intent = new IntentStruct({
         minaMaker: zkApp.PublicKey.fromBase58(account),
-        lockedAmountMina: zkApp.UInt64.from(10 * 1e9),
-        minZecAmount: zkApp.UInt64.from(100000),
-        receiverHash: Field(0), // Needs to match
-        deadlineSlot: zkApp.UInt64.from(1000000),
+        lockedAmountMina: zkApp.UInt64.from(Number(lockAmount) * 1e9),
+        minZecAmount: zkApp.UInt64.from(Number(minZec)),
+        receiverHash: zkApp.Poseidon.hash([Field(123)]), // Matches createIntent
+        deadlineSlot: UInt32.from(200000),
         state: Field(0)
       });
 
@@ -120,7 +133,9 @@ export default function Home() {
         indexerData.witness.siblings.map((s: string) => Field(s))
       );
 
-      // Mock Key Witness (for Intent Map)
+      // Mock Key Witness (for Intent Map) - assuming ID 0 and it's the only one or we know the path
+      // In a real app, we'd fetch this from Indexer too. 
+      // For ID 0, it's just the path to leaf 0.
       const keyWitness = new MerkleMapWitness(
         new Array(255).fill(false),
         new Array(255).fill(Field(0))
@@ -134,7 +149,28 @@ export default function Home() {
       setStatus('Proof Generated. Sending Transaction...');
 
       // 3. Send Tx
-      console.log("Would call contract.claim with:", proofData);
+      await (window as any).mina.sendTransaction({
+        transaction: async () => {
+          await contract.claim(
+            intentId,
+            intent,
+            keyWitness,
+            nullifierWitness,
+            proofData.claimedAmount,
+            proofData.receiverHash,
+            proofData.anchorPublic,
+            proofData.bridgeNullifier,
+            proofData.cm,
+            proofData.pk_d_receiver,
+            proofData.value,
+            proofData.rseed,
+            proofData.rho,
+            proofData.merklePath,
+            proofData.position,
+            proofData.nf
+          );
+        }
+      });
 
       // 4. Update Indexer
       await fetch('http://localhost:3001/update/bridgeNullifier', {
@@ -159,7 +195,9 @@ export default function Home() {
       {/* Header */}
       <header className="absolute top-0 w-full p-6 flex justify-between items-center z-10">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Zcash-Mina Bridge" className="w-10 h-10 rounded-full border border-white/20 shadow-lg shadow-purple-500/20" />
+          <div className="w-10 h-10 rounded-full border border-white/20 shadow-lg shadow-purple-500/20 overflow-hidden flex items-center justify-center bg-black">
+            <img src="/logo.png" alt="Zcash-Mina Bridge" className="w-[160%] h-[160%] max-w-none object-cover" />
+          </div>
           <span className="font-bold text-xl tracking-tight">Zcash<span className="text-purple-400">Bridge</span></span>
         </div>
         {!account ? (
