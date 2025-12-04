@@ -1,5 +1,5 @@
 import { Mina, PrivateKey, AccountUpdate } from 'o1js';
-import { BridgeContract } from './src/BridgeContract';
+import { BridgeContract } from './BridgeContract';
 
 const NETWORK_URL = 'https://api.minascan.io/node/devnet/v1/graphql';
 const DEPLOYER_KEY = 'EKFFostjkp4arnySMXrsA2Ukrkc3ShidWxDxvehUje6P4FverH28';
@@ -24,7 +24,7 @@ async function deploy() {
     const zkApp = new BridgeContract(zkAppAddress);
 
     const deployTx = await Mina.transaction({ sender: deployerAccount, fee: 1_000_000_000 }, async () => {
-        AccountUpdate.fundNewAccount(deployerAccount);
+        AccountUpdate.fundNewAccount(zkAppAddress);
         await zkApp.deploy({ verificationKey });
         await zkApp.initialize(deployerAccount); // Set deployer as admin
     });

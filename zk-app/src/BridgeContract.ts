@@ -14,6 +14,8 @@ import {
     Poseidon,
     Provable,
     Reducer,
+    AccountUpdate,
+    Signature,
 } from 'o1js';
 
 export class IntentStruct extends Struct({
@@ -25,9 +27,7 @@ export class IntentStruct extends Struct({
     state: Field, // 0=OPEN, 1=FILLED, 2=CANCELLED
 }) { }
 
-export class MerklePath32 extends Struct({
-    path: Provable.Array(Field, 32)
-}) { }
+// MerklePath32 removed as we use Oracle Signatures now
 
 // We need a way to store intents. For a PoC with limited storage, we can use a Merkle Map or just events/actions.
 // However, to enforce state transitions on-chain (like preventing double spend or cancellation), we need state.
@@ -37,7 +37,7 @@ export class MerklePath32 extends Struct({
 // So we will store the root of the Intents Merkle Map.
 
 export class BridgeContract extends SmartContract {
-    @state(Field) oracleAnchorRoot = State<Field>();
+    // @state(Field) oracleAnchorRoot = State<Field>(); // Removed
     @state(Field) nextIntentId = State<Field>();
     @state(Field) usedBridgeNullifiersRoot = State<Field>(); // Root of MerkleMap for nullifiers
     @state(Field) intentsRoot = State<Field>(); // Root of MerkleMap for intents
@@ -65,12 +65,13 @@ export class BridgeContract extends SmartContract {
         this.intentsRoot.set(emptyRoot);
     }
 
-    @method async adminUpdateAnchor(newAnchorRoot: Field) {
+    // adminUpdateAnchor removed
+
+    @method async updateAdmin(newAdmin: PublicKey) {
         const admin = this.admin.getAndRequireEquals();
         const sender = this.sender.getAndRequireSignature();
         sender.assertEquals(admin);
-
-        this.oracleAnchorRoot.set(newAnchorRoot);
+        this.admin.set(newAdmin);
     }
 
     @method async createIntent(
@@ -85,17 +86,8 @@ export class BridgeContract extends SmartContract {
         const sender = this.sender.getAndRequireSignature();
 
         // Lock MINA
-        // In o1js, we can't easily "hold" funds in the contract without a balance check or transfer.
-        // We assume the sender sends funds to the contract address with this transaction.
-        // The contract's balance will increase. We track the locked amount in the intent.
-        // Actually, `this.balance.addInPlace(amountToLock)` is not how it works.
-        // The user sends a transaction *to* this contract with an amount.
-        // We verify the amount matches amountToLock?
-        // o1js doesn't have a direct "msg.value" check like Solidity easily accessible in the method signature unless we check account balance delta,
-        // but usually we just rely on the fact that if the method succeeds, the protocol handles the transfer if structured correctly.
-        // For this PoC, we'll assume the user attaches the funds.
-        // A more robust way is to transfer FROM sender TO this contract.
-        // this.send({ from: sender, to: this.address, amount: amountToLock }); // This requires signature from sender which we have.
+        const senderUpdate = AccountUpdate.createSigned(sender);
+        senderUpdate.send({ to: this.address, amount: amountToLock });
 
         // Create Intent
         const intent = new IntentStruct({
@@ -161,24 +153,16 @@ export class BridgeContract extends SmartContract {
         intent: IntentStruct,
         keyWitness: MerkleMapWitness,
         nullifierWitness: MerkleMapWitness,
-        // Proof inputs
+        // Claim details
         claimedAmount: UInt64,
         receiverHash: Field,
-        anchorPublic: Field,
         bridgeNullifier: Field,
-        cm: Field,
-        // Private inputs (witnesses)
-        pk_d_receiver: Field,
-        value: UInt64,
-        rseed: Field,
-        rho: Field,
-        merklePath: MerklePath32,
-        position: Field,
-        nf: Field
+        // Oracle Signature
+        oracleSignature: Signature
     ) {
         const currentIntentsRoot = this.intentsRoot.getAndRequireEquals();
         const currentNullifiersRoot = this.usedBridgeNullifiersRoot.getAndRequireEquals();
-        const oracleAnchor = this.oracleAnchorRoot.getAndRequireEquals();
+        const adminKey = this.admin.getAndRequireEquals();
 
         // 1. Verify Intent Inclusion
         const [iRoot, iKey] = keyWitness.computeRootAndKey(Poseidon.hash(IntentStruct.toFields(intent)));
@@ -191,62 +175,23 @@ export class BridgeContract extends SmartContract {
         currentSlot.assertLessThanOrEqual(intent.deadlineSlot);
 
         // 3. Verify Nullifier Non-inclusion
-        const computedNullifier = Poseidon.hash([nf, intentId]);
-        computedNullifier.assertEquals(bridgeNullifier);
-
         const [nRoot, nKey] = nullifierWitness.computeRootAndKey(Field(0)); // Should be empty (0)
         nRoot.assertEquals(currentNullifiersRoot);
         nKey.assertEquals(bridgeNullifier);
 
-        // 4. Verify Oracle Anchor
-        anchorPublic.assertEquals(oracleAnchor);
+        // 4. Verify Oracle Signature
+        // The Oracle signs: [bridgeNullifier, claimedAmount, receiverHash]
+        // ensuring that the Zcash note with this nullifier pays this amount to this receiver.
+        const validSignature = oracleSignature.verify(adminKey, [
+            bridgeNullifier,
+            ...claimedAmount.toFields(),
+            receiverHash
+        ]);
+        validSignature.assertTrue("Invalid Oracle Signature");
 
-        // 5. Verify "Zcash" Circuit Logic
-        const computedCm = Poseidon.hash([pk_d_receiver, value.value, rseed, rho]);
-        computedCm.assertEquals(cm);
-
-        const computedReceiverHash = Poseidon.hash([pk_d_receiver]);
-        computedReceiverHash.assertEquals(intent.receiverHash);
+        // 5. Verify Claim Matches Intent
         intent.receiverHash.assertEquals(receiverHash);
-
-        value.assertGreaterThanOrEqual(intent.minZecAmount);
-        value.assertEquals(claimedAmount);
-
-        // Verify Merkle Path Inclusion
-        // We assume a fixed height for the Orchard tree in this PoC or dynamic up to a limit.
-        // Orchard tree height is 32.
-        // We iterate through the path to compute the root.
-        let currentHash = cm;
-        let pathBits = position.toBits(32); // Orchard tree depth is 32
-
-        // We verify against the provided path. 
-        // Note: In a real circuit we'd loop over the path length.
-        // o1js loops must be static or use recursion.
-        // Since merklePath is an array passed as witness, we can iterate it.
-        // We assume merklePath length is 32.
-
-        for (let i = 0; i < 32; i++) {
-            // We need to verify if the path element exists at this index
-            // For PoC, we assume the array is fully populated with 32 elements.
-            // If the array is shorter, it will fail or we need to pad.
-            // We'll assume the prover sends exactly 32 elements.
-            const sibling = merklePath.path[i];
-
-            // If bit is 0, current is left, sibling is right -> hash(current, sibling)
-            // If bit is 1, current is right, sibling is left -> hash(sibling, current)
-            const isRight = pathBits[i];
-
-            // Poseidon hash for Merkle Tree nodes
-            // Note: Orchard uses Pedersen/Sinsemilla, we use Poseidon for PoC simplification as noted.
-            currentHash = Provable.if(
-                isRight,
-                Poseidon.hash([sibling, currentHash]),
-                Poseidon.hash([currentHash, sibling])
-            );
-        }
-
-        currentHash.assertEquals(anchorPublic);
-
+        claimedAmount.assertGreaterThanOrEqual(intent.minZecAmount);
 
         // 6. Execute Claim
         this.send({ to: this.sender.getAndRequireSignature(), amount: intent.lockedAmountMina });

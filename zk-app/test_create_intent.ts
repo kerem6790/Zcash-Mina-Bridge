@@ -3,7 +3,7 @@ import { BridgeContract, IntentStruct } from './src/BridgeContract';
 
 const NETWORK_URL = 'https://api.minascan.io/node/devnet/v1/graphql';
 const DEPLOYER_KEY = 'EKFFostjkp4arnySMXrsA2Ukrkc3ShidWxDxvehUje6P4FverH28';
-const ZKAPP_ADDR = 'B62qrv2VSPTmLhJNvJYH7AfGSZHCsK5iKteUtceHvb1gzTNBgcTAY9F';
+const ZKAPP_ADDR = 'B62qnoC1EUAQuiSrUG8VCA5DCZijm65ovWgESBct776SpkunSRe3oo3';
 
 async function main() {
     console.log("🚀 Testing createIntent on Live Contract...");

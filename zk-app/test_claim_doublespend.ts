@@ -1,9 +1,9 @@
-import { Mina, PrivateKey, Field, UInt64, UInt32, Poseidon, MerkleMap, PublicKey, fetchAccount, MerkleMapWitness } from 'o1js';
-import { BridgeContract, IntentStruct, MerklePath32 } from './src/BridgeContract';
+import { Mina, PrivateKey, Field, UInt64, UInt32, Poseidon, MerkleMap, PublicKey, fetchAccount, MerkleMapWitness, Signature } from 'o1js';
+import { BridgeContract, IntentStruct } from './src/BridgeContract';
 
 const NETWORK_URL = 'https://api.minascan.io/node/devnet/v1/graphql';
 const DEPLOYER_KEY = 'EKFFostjkp4arnySMXrsA2Ukrkc3ShidWxDxvehUje6P4FverH28';
-const ZKAPP_ADDR = 'B62qrv2VSPTmLhJNvJYH7AfGSZHCsK5iKteUtceHvb1gzTNBgcTAY9F';
+const ZKAPP_ADDR = 'B62qnoC1EUAQuiSrUG8VCA5DCZijm65ovWgESBct776SpkunSRe3oo3';
 
 async function main() {
     console.log("🚀 Testing Claim & Double Spend on Live Contract...");
@@ -120,28 +120,8 @@ async function main() {
 
 
     // --- 2. Update Anchor (Mock Oracle) ---
-    console.log("\n🔮 2. Updating Anchor (Mocking Oracle)...");
-
-    // Construct Mock Merkle Path for Zcash
-    const cm = Poseidon.hash([receiverPkD, minZecAmount.value, Field(0), Field(0)]); // rseed=0, rho=0
-    const pathElements: Field[] = new Array(32).fill(Field(0));
-    let currentHash = cm;
-    const position = Field(0);
-    const pathBits = position.toBits(32);
-    for (let i = 0; i < 32; i++) {
-        const sibling = pathElements[i];
-        const isRight = pathBits[i];
-        currentHash = isRight ? Poseidon.hash([sibling, currentHash]) : Poseidon.hash([currentHash, sibling]);
-    }
-    const mockAnchorRoot = currentHash;
-
-    const updateTx = await Mina.transaction({ sender: deployerAccount, fee: 200_000_000 }, async () => {
-        await zkApp.adminUpdateAnchor(mockAnchorRoot);
-    });
-    await updateTx.prove();
-    const updateTxSent = await updateTx.sign([deployerKey]).send();
-    console.log(`✅ Anchor Updated! Hash: ${updateTxSent.hash}`);
-    await updateTxSent.wait();
+    // Skipped: Oracle Anchor is no longer on-chain. We use signatures.
+    console.log("\n🔮 2. Skipping Anchor Update (Using Signatures)...");
 
 
     // --- 3. Claim ---
@@ -172,7 +152,11 @@ async function main() {
     const bridgeNullifier = Poseidon.hash([nf, nextIntentId]);
     const nullifierWitness = nullifiersMap.getWitness(bridgeNullifier);
 
-    const merklePathStruct = new MerklePath32({ path: pathElements });
+    const oracleSignature = Signature.create(deployerKey, [
+        bridgeNullifier,
+        ...minZecAmount.toFields(),
+        receiverHash
+    ]);
 
     const claimTx = await Mina.transaction({ sender: deployerAccount, fee: 200_000_000 }, async () => {
         await zkApp.claim(
@@ -182,16 +166,8 @@ async function main() {
             nullifierWitness,
             minZecAmount,
             receiverHash,
-            mockAnchorRoot,
             bridgeNullifier,
-            cm,
-            receiverPkD,
-            minZecAmount,
-            Field(0), // rseed
-            Field(0), // rho
-            merklePathStruct,
-            position,
-            nf
+            oracleSignature
         );
     });
     await claimTx.prove();
@@ -230,12 +206,8 @@ async function main() {
                 nullifierWitness2,
                 minZecAmount,
                 receiverHash,
-                mockAnchorRoot,
                 bridgeNullifier,
-                cm,
-                receiverPkD,
-                minZecAmount,
-                Field(0), Field(0), merklePathStruct, position, nf
+                oracleSignature
             );
         });
         await doubleSpendTx.prove();
