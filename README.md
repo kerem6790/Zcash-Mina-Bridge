@@ -93,3 +93,52 @@ In the future, I plan to:
 *   **Generalize Intents:** Allow for more complex swap logic and partial fills.
 
 ZIMA is a step towards a future where you can move value between chains without leaving a digital footprint.
+
+---
+
+## How to Use
+
+### Prerequisites
+- **Node.js** (v18 or later)
+- **Rust** (latest stable)
+- **Mina zkApp CLI** (`npm install -g zkapp-cli`)
+
+### Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/kerem6790/Zcash-Mina-Bridge.git
+    cd Zcash-Mina-Bridge
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    cd zk-app
+    npm install
+    ```
+
+### Running Tests
+
+To verify the core logic of the bridge (creating intents, verifying proofs, and claiming funds), run the test suite:
+
+```bash
+npm run test
+```
+
+This will execute the local Mina blockchain mock and simulate the entire flow:
+1.  Creating an intent.
+2.  Mocking a valid Zcash proof.
+3.  Successfully claiming the locked MINA.
+4.  Attempting a double-spend (which should fail).
+
+### Deployment (Devnet)
+
+To deploy the contract to the Mina Devnet:
+
+1.  Configure your deployment alias in `config.json`.
+2.  Run the deploy command:
+    ```bash
+    zk deploy devnet
+    ```
+
+For more detailed technical documentation on the custom wallet or the circuit architecture, please refer to the `docs/` folder.
