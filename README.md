@@ -91,6 +91,7 @@ In the future, I plan to:
 *   **Decentralize the Oracle:** Replace the single oracle with a consensus-based or ZK-light-client approach.
 *   **Improve the Wallet UX:** Integrate the "witness export" feature into a more user-friendly web or browser-extension wallet.
 *   **Generalize Intents:** Allow for more complex swap logic and partial fills.
+*   **Add QR code deposit to fronted for sending zcash, providing better UX
 
 ZIMA is a step towards a future where you can move value between chains without leaving a digital footprint.
 
